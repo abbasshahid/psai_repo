@@ -1,0 +1,6 @@
+results.zip
+results_onchain.zip
+.mypy_cache/
+results/
+__pycache__/
+results_onchain/
