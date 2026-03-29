@@ -13,11 +13,16 @@ def welfare(T: float, L: float, F: float, A: float, omega_T=1e-3, omega_L=1.0, o
     return float(omega_T*np.log(1.0+T) - omega_L*L + omega_F*F - omega_A*A)
 
 def deviation_gain(p_base: Dict[str,float], p_psai: Dict[str,float]) -> float:
-    # proxy for Delta_i(t): max_i (p_psai - p_base)
+    """Relative deviation proxy for Delta_i(t).
+
+    Computes max_i |p_psai(i) - p_base(i)| / p_base(i),
+    i.e. the maximum relative payout deviation from the baseline.
+    This is comparable to the epsilon threshold in Eq. (31).
+    """
     ids = set(p_psai.keys()).intersection(p_base.keys())
     if not ids:
         return 0.0
-    diffs = [p_psai[i] - p_base[i] for i in ids]
+    diffs = [abs(p_psai[i] - p_base[i]) / (abs(p_base[i]) + 1e-8) for i in ids]
     return float(max(diffs))
 
 def sybil_unprofitability_check(weights_before: float, weights_after: float) -> float:

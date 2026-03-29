@@ -1,12 +1,13 @@
 
 import numpy as np
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from .encoding import Action
 from .utils_crypto import keccak256
+from .config import AblationConfig
 
 def sigmoid(x: np.ndarray) -> np.ndarray:
-    return 1.0 / (1.0 + np.exp(-x))
+    return 1.0 / (1.0 + np.exp(-np.clip(x, -500, 500)))
 
 @dataclass
 class ValidatorOnChain:
@@ -23,12 +24,18 @@ class PSAIContractMirror:
       - Predictors (Eqs. 7–8), delta (Eq. 9)
       - Reward kernel (Eq. 26), budget balance (Eq. 28)
       - Penalty function (Eq. 27) with stake bound
+      - Soft penalty gating: penalty *= min(1, z / z_threshold) to reduce false slashing
+      - Ablation controls for ρ, δ, penalty-risk multiplier
     """
 
-    def __init__(self, wq: np.ndarray, wr: np.ndarray, bounds: Dict[str, float]):
+    def __init__(self, wq: np.ndarray, wr: np.ndarray, bounds: Dict[str, float],
+                 ablation: Optional[AblationConfig] = None,
+                 z_threshold: float = 0.30):
         self.wq = wq.astype(float).copy()
         self.wr = wr.astype(float).copy()
         self.bounds = bounds
+        self.ablation = ablation or AblationConfig()
+        self.z_threshold = z_threshold
         self.epoch = 0
         self._commit: bytes | None = None
         self._revealed_action: Action | None = None
@@ -74,8 +81,15 @@ class PSAIContractMirror:
         q = sigmoid(X @ self.wq)
         rho = sigmoid(X @ self.wr)
 
+        # Ablation: disable rho
+        if self.ablation.disable_rho:
+            rho = np.zeros_like(rho)
+
         # Eq. 9
-        delta = np.exp(X @ eta) * (q ** a.lam) * ((1.0 - rho) ** a.lam)
+        if self.ablation.disable_delta:
+            delta = np.ones(len(ids), dtype=float)
+        else:
+            delta = np.exp(X @ eta) * (q ** a.lam) * ((1.0 - rho) ** a.lam)
 
         # Eq. 39
         w = np.exp(a.alpha * m) * delta
@@ -84,8 +98,21 @@ class PSAIContractMirror:
         # Eq. 26
         p = reward_pool * (w / Z)
 
-        # Eq. 27
-        l = a.beta * S * z * (1.0 + a.lam * rho)
+        # Eq. 27 — penalty with soft z-gating for false-slash reduction
+        if self.ablation.disable_penalty_risk:
+            risk_mult = np.ones_like(rho)
+        else:
+            risk_mult = 1.0 + a.lam * rho
+
+        l = a.beta * S * z * risk_mult
+
+        # Penalty gate: quadratic by default, linear if ablation flag set
+        if self.ablation.disable_quadratic_gate:
+            z_gate = np.clip(z / self.z_threshold, 0.0, 1.0)  # linear gate
+        else:
+            z_gate = np.clip((z / self.z_threshold) ** 2, 0.0, 1.0)  # quadratic gate
+        l = l * z_gate
+
         l = np.minimum(l, S)
 
         payouts = {ids[i]: float(p[i]) for i in range(len(ids))}

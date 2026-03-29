@@ -1,7 +1,7 @@
 
 import numpy as np
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple, Optional
 from .contract_mirror import ValidatorOnChain
 
 @dataclass
@@ -86,14 +86,27 @@ class UserPopulation:
         return T, L, F
 
 class PSAISimEnv:
-    """Agent-based simulation environment consistent with the PSAI model."""
+    """Agent-based simulation environment consistent with the PSAI model.
 
-    def __init__(self, K: int, N: int, users: int, rng: np.random.Generator, sybil_prob: float, collusion_prob: float):
+    Supports:
+      - Forced Sybil/collusion events at specified epochs (deterministic stress tests)
+      - Configurable adversary intensity for attack severity
+      - Probabilistic events as fallback outside forced epochs
+    """
+
+    def __init__(self, K: int, N: int, users: int, rng: np.random.Generator,
+                 sybil_prob: float, collusion_prob: float,
+                 forced_sybil_epochs: Optional[List[int]] = None,
+                 forced_collusion_epochs: Optional[List[int]] = None,
+                 adversary_intensity: float = 0.5):
         self.K, self.N = K, N
         self.rng = rng
         self.users = UserPopulation(users, rng)
         self.sybil_prob = sybil_prob
         self.collusion_prob = collusion_prob
+        self.forced_sybil_epochs = set(forced_sybil_epochs or [])
+        self.forced_collusion_epochs = set(forced_collusion_epochs or [])
+        self.adversary_intensity = adversary_intensity
         self.validators: Dict[str, ValidatorAgent] = {}
         self._init_validators()
 
@@ -112,12 +125,18 @@ class PSAISimEnv:
         demand = float(np.clip(0.5 + 0.25*np.sin(2*np.pi*t/50.0) + 0.15*self.rng.normal(), 0.0, 1.5))
         network_noise = float(0.10*self.rng.normal())
 
-        colluding_flag = self.rng.random() < self.collusion_prob
+        # Collusion: forced at specified epochs OR probabilistic
+        force_collusion = t in self.forced_collusion_epochs
+        colluding_flag = force_collusion or (self.rng.random() < self.collusion_prob)
         coalition = set()
         if colluding_flag:
             ids = list(self.validators.keys())
             self.rng.shuffle(ids)
-            coalition = set(ids[: int(self.rng.integers(3, 7))])
+            # Scale coalition size with adversary_intensity
+            min_size = 3
+            max_size = max(min_size + 1, int(3 + 7 * self.adversary_intensity))
+            coalition_size = int(self.rng.integers(min_size, max_size))
+            coalition = set(ids[:coalition_size])
 
         feature_attack = self.rng.random() < 0.25
 
@@ -131,12 +150,16 @@ class PSAISimEnv:
             z_dict[vid] = z
             x_dict[vid] = x
 
-        # Eq. (38): Sybil splitting
-        if self.rng.random() < self.sybil_prob:
+        # Eq. (38): Sybil splitting — forced at specified epochs OR probabilistic
+        force_sybil = t in self.forced_sybil_epochs
+        sybil_occurred = False
+        if force_sybil or (self.rng.random() < self.sybil_prob):
             adv_ids = [vid for vid, v in self.validators.items() if v.kind == "adversary"]
             if adv_ids:
+                sybil_occurred = True
                 target = self.rng.choice(adv_ids)
-                n = int(self.rng.integers(2, 5))
+                # Scale number of splits with adversary_intensity
+                n = int(self.rng.integers(2, max(3, int(2 + 5 * self.adversary_intensity))))
                 total = self.validators[target].stake
                 parts = (self.rng.dirichlet(np.ones(n)) * total).astype(float)
                 base_x = x_dict[target].copy()
@@ -161,5 +184,9 @@ class PSAISimEnv:
             "colluding": float(colluding_flag),
             "feature_attack": float(feature_attack),
             "num_validators": float(len(v_onchain)),
+            "sybil_occurred": float(sybil_occurred),
+            "collusion_occurred": float(colluding_flag),
+            "forced_sybil": float(force_sybil),
+            "forced_collusion": float(force_collusion),
         }
         return v_onchain, obs, m_dict, x_dict
