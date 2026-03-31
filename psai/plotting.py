@@ -108,30 +108,47 @@ def save_comparison_line(data_dict: dict, x_key: str, out_png: str, out_pdf: str
     plt.close(fig)
 
 def save_bar_comparison(labels: list, values_dict: dict, out_png: str, out_pdf: str,
-                         title: str = "", ylabel: str = "", errors_dict: dict = None):
-    """Grouped bar chart for baseline comparison summary."""
+                         title: str = "", ylabel: str = "", errors_dict: dict = None,
+                         log_y: bool = False):
+    """Save separate bar charts for comparing metrics."""
     _apply_ieee()
-    fig, ax = plt.subplots(figsize=(4.5, 3.0))
-
-    n_groups = len(labels)
+    
     n_bars = len(values_dict)
-    bar_width = 0.8 / n_bars
-    x = np.arange(n_groups)
+    
+    base_png = out_png.replace(".png", "")
+    base_pdf = out_pdf.replace(".pdf", "")
 
-    for i, (name, vals) in enumerate(values_dict.items()):
-        color = COLORS.get(name, None)
-        errs = errors_dict.get(name) if errors_dict else None
-        ax.bar(x + i * bar_width - (n_bars - 1) * bar_width / 2, vals,
-               bar_width, label=name, color=color, alpha=0.85,
-               yerr=errs, capsize=2)
+    for j, metric in enumerate(labels):
+        fig, ax = plt.subplots(figsize=(3.5, 2.8))
+        
+        names = []
+        vals_list = []
+        errs_list = []
+        colors = []
+        
+        for name, vals in values_dict.items():
+            names.append(name)
+            vals_list.append(vals[j])
+            errs = errors_dict.get(name) if errors_dict else None
+            errs_list.append(errs[j] if errs else 0.0)
+            colors.append(COLORS.get(name, "gray"))
+            
+        x = np.arange(n_bars)
+        bars = ax.bar(x, vals_list, color=colors, alpha=0.85, yerr=errs_list, capsize=3)
+        
+        ax.set_xticks(x)
+        ax.set_xticklabels(names, rotation=25, ha="right")
+        ax.set_ylabel(metric)
+        ax.grid(axis='y', linestyle='--', alpha=0.3)
+        
+        if metric == "Total Penalty":
+            for i, val in enumerate(vals_list):
+                if val <= 1e-6:
+                    ax.text(x[i], max(vals_list)*0.02, "0 (N/A)", ha='center', va='bottom', fontsize=8, color='black', alpha=0.8)
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=15, ha="right")
-    ax.set_ylabel(ylabel)
-    if title:
-        ax.set_title(title)
-    ax.legend(loc="best", fontsize=7, framealpha=0.9)
-    fig.tight_layout()
-    fig.savefig(out_png, dpi=300)
-    fig.savefig(out_pdf)
-    plt.close(fig)
+        # No separate legend needed since x-ticks label the bars directly
+        fig.tight_layout()
+        metric_slug = metric.lower().replace(" ", "_")
+        fig.savefig(f"{base_png}_{metric_slug}.png", dpi=300, bbox_inches="tight")
+        fig.savefig(f"{base_pdf}_{metric_slug}.pdf", bbox_inches="tight")
+        plt.close(fig)

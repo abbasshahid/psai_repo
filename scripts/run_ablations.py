@@ -25,7 +25,7 @@ VARIANTS = {
     r"No $\delta$":       AblationConfig(disable_delta=True),
 }
 
-SEEDS = [7, 42, 99]
+SEEDS = list(range(10))
 N_EPOCHS = 200
 
 
@@ -76,7 +76,7 @@ def main():
     with open("tables/table_ablation.tex", "w") as f:
         f.write(r"""\begin{table}[t]
 \centering
-\caption{Ablation study across mechanism components (3 seeds, 200 epochs each). Bold indicates the best value.}
+\caption{Ablation study across mechanism components (10 seeds, 200 epochs each). Bold indicates the best value.}
 \label{tab:ablation}
 \begin{tabular}{lccccc}
 \toprule

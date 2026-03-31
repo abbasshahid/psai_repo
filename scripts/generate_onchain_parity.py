@@ -160,7 +160,7 @@ def main():
 
     # Paid parity plot
     fig, ax = plt.subplots()
-    ax.plot(epochs, mirror_paid, label="Mirror (float64)", linewidth=1.2, color="#2166ac")
+    ax.plot(epochs, mirror_paid, label="Mirror (float64)", linewidth=2.5, color="#2166ac", alpha=0.7)
     ax.plot(epochs, onchain_paid, label="On-chain (fixed-pt)", linewidth=1.2,
             linestyle="--", color="#b2182b")
     ax.set_xlabel("Epoch")
@@ -174,7 +174,7 @@ def main():
 
     # Slashed parity plot
     fig, ax = plt.subplots()
-    ax.plot(epochs, mirror_slashed, label="Mirror (float64)", linewidth=1.2, color="#2166ac")
+    ax.plot(epochs, mirror_slashed, label="Mirror (float64)", linewidth=2.5, color="#2166ac", alpha=0.7)
     ax.plot(epochs, onchain_slashed, label="On-chain (fixed-pt)", linewidth=1.2,
             linestyle="--", color="#b2182b")
     ax.set_xlabel("Epoch")

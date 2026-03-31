@@ -161,12 +161,18 @@ def aggregate_seeds(all_dfs: list, output_dir: str, cfg: SimConfig):
     if "herfindahl_qos_mean" in epoch_df.columns:
         bar_data["QoS-Only"] = [epoch_df["welfare_mean"].mean(), epoch_df["herfindahl_qos_mean"].mean(), 0.0]
         bar_err["QoS-Only"] = [epoch_df["welfare_std"].mean(), epoch_df["herfindahl_qos_std"].mean(), 0.0]
+    if "total_penalty_fixed_mean" in epoch_df.columns:
+        bar_data["Fixed-Slash"] = [epoch_df["welfare_mean"].mean(), epoch_df["herfindahl_prop_mean"].mean(), epoch_df["total_penalty_fixed_mean"].mean()]
+        bar_err["Fixed-Slash"] = [epoch_df["welfare_std"].mean(), epoch_df["herfindahl_prop_std"].mean(), epoch_df["total_penalty_fixed_std"].mean()]
+    if "herfindahl_heur_mean" in epoch_df.columns:
+        bar_data["Heuristic-β"] = [epoch_df["welfare_mean"].mean(), epoch_df["herfindahl_heur_mean"].mean(), epoch_df["total_penalty_heur_mean"].mean()]
+        bar_err["Heuristic-β"] = [epoch_df["welfare_std"].mean(), epoch_df["herfindahl_heur_std"].mean(), epoch_df["total_penalty_heur_std"].mean()]
 
     save_bar_comparison(bar_labels, bar_data,
                         os.path.join(output_dir, "plots", "summary_bars.png"),
                         os.path.join(output_dir, "plots", "summary_bars.pdf"),
                         title="PSAI vs Baselines (Aggregated)", ylabel="Value",
-                        errors_dict=bar_err)
+                        errors_dict=bar_err, log_y=True)
 
     print(f"\nAggregated results saved to {output_dir}/")
     print(f"  Tables: {os.path.join(output_dir, 'tables')}")
